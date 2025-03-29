@@ -7,4 +7,4 @@ This project aims to develop a **semi-automated annotation pipeline** and a **de
 
 This repository contains the source code, datasets, and implementation details for our proposed framework, along with benchmarking results and evaluation metrics.
 
-![image](https://github.com/user-attachments/assets/c7e5de20-d5bf-4c0d-8063-eac65ecd5454)
+![alt text](image.png)
