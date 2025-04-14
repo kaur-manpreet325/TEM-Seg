@@ -18,10 +18,10 @@ import shutil
 # Constants
 IMG_SIZE = 512
 BATCH_SIZE = 4
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+DEVICE = torch.device("cuda:2" if torch.cuda.device_count() > 2 else "cuda" if torch.cuda.is_available() else "cpu")
 LR = 1e-4
 EPOCHS = 300
-PATIENCE = 25  # Early stopping patience
+PATIENCE = 2  # Early stopping patience
 FEATURE_SIZE = 84 # Feature size extracted from Swin UNETR
 TCN_CHANNELS = [128, 256, 512]
 NUM_CLASSES = 1  # Segmentation is binary (foreground/background)
@@ -29,6 +29,7 @@ INITIAL_UNCERTAINTY_THRESHOLD = 0.9  # Initial threshold for pseudo-label confid
 INITIAL_SELF_TRAIN_RATIO = 0.5 # Initial ratio of unlabeled data to use for self-training
 NUM_ENSEMBLE = 5 # Number of ensemble models to use for pseudo labeling
 NUM_SELF_TRAINING_ITERATIONS = 5  # Number of times to repeat self-training
+INITIAL_LAMBDA = 0.1 # Initial lambda factor
 
 # Paths (update these based on your directory structure)
 base_save_dir = "/path/to/split_labeled_data"  # Split directories for images
@@ -40,7 +41,7 @@ test_dir = os.path.join(base_save_dir, "test")
 unlabeled_dir = os.path.join(base_save_dir, "unlabeled")
 
 # Helper function to create DataFrame from image and mask directories
-def create_dataframe(image_dir, mask_dir=None):
+def create_dataframe(image_dir, mask_dir=None, is_pseudo=False):
     """
     Creates a DataFrame with image and corresponding mask paths.
 
@@ -52,7 +53,7 @@ def create_dataframe(image_dir, mask_dir=None):
         pd.DataFrame: DataFrame with columns 'images' and 'masks'.
     """
     image_files = sorted(glob.glob(os.path.join(image_dir, '*.png')))
-    
+
     if mask_dir:
         # Match masks based on filenames in the image directory
         mask_files = [
@@ -61,15 +62,17 @@ def create_dataframe(image_dir, mask_dir=None):
         ]
         df = pd.DataFrame({
             'images': image_files,
-            'masks': mask_files
+            'masks': mask_files,
+            'is_pseudo': [is_pseudo] * len(image_files)
         })
     else:
         # For unlabeled data, masks are set to None
         df = pd.DataFrame({
             'images': image_files,
-            'masks': [None] * len(image_files)
+            'masks': [None] * len(image_files),
+            'is_pseudo': [is_pseudo] * len(image_files)
         })
-    
+
     return df
 
 # Create DataFrames for train, validation, test, and unlabeled sets
@@ -101,7 +104,8 @@ def get_test_augs():
     return A.Compose([
         A.Resize(IMG_SIZE, IMG_SIZE)
     ], is_check_shapes=False)
-
+    
+# Dataset class
 class SegmentationDataset(Dataset):
     def __init__(self, df, augmentation):
         self.df = df
@@ -114,6 +118,7 @@ class SegmentationDataset(Dataset):
         row = self.df.iloc[idx]
         image_path = row.images
         mask_path = row.masks
+        is_pseudo = row.is_pseudo
 
         image = cv2.imread(image_path)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
@@ -135,7 +140,7 @@ class SegmentationDataset(Dataset):
         image = np.expand_dims(image, axis=0)
         mask = np.expand_dims(mask, axis=0)
 
-        return torch.tensor(image), torch.tensor(mask.squeeze(0))
+        return torch.tensor(image), torch.tensor(mask.squeeze(0)), torch.tensor(is_pseudo)
 
 # Create datasets and dataloaders
 trainset = SegmentationDataset(train_df, get_train_augs())
@@ -280,18 +285,29 @@ def pixel_accuracy(y_true, y_pred):
     total = len(y_true_f)
     return correct / total
 
-def train_fn(data_loader, model, optimizer):
+def train_fn(data_loader, model, optimizer, lambda_factor):
     model.train()
     total_loss = 0.0
-    for images, masks in tqdm(data_loader):
+    for images, masks, is_pseudo in tqdm(data_loader):
         images = images.to(DEVICE)
         masks = masks.to(DEVICE)
+        is_pseudo = is_pseudo.to(DEVICE).float()
+
         optimizer.zero_grad()
-        _, loss = model(images, masks)
+        logits = model(images)
+        dice_loss = smp.losses.DiceLoss(mode='binary')(logits, masks)
+        bce_loss = F.binary_cross_entropy_with_logits(logits, masks)
+        loss_per_sample = dice_loss + bce_loss
+
+        supervised_loss = (loss_per_sample * (1 - is_pseudo)).mean()
+        pseudo_loss = (loss_per_sample * is_pseudo).mean()
+        loss = supervised_loss + lambda_factor * pseudo_loss
+
         loss.backward()
         optimizer.step()
         total_loss += loss.item()
     return total_loss / len(data_loader)
+
 
 def eval_fn(data_loader, model):
     model.eval()
@@ -300,10 +316,13 @@ def eval_fn(data_loader, model):
     iou_scores = []
     pixel_acc_scores = []
     with torch.no_grad():
-        for images, masks in tqdm(data_loader):
+        for images, masks, _ in tqdm(data_loader):
             images = images.to(DEVICE)
             masks = masks.to(DEVICE)
-            logits, loss = model(images, masks)
+            logits = model(images)
+            loss1 = smp.losses.DiceLoss(mode='binary')(logits, masks)
+            loss2 = nn.BCEWithLogitsLoss()(logits, masks)
+            loss = loss1 + loss2
             total_loss += loss.item()
 
             preds = torch.sigmoid(logits).cpu().numpy() > 0.5
@@ -316,16 +335,15 @@ def eval_fn(data_loader, model):
     return total_loss / len(data_loader), np.mean(dice_scores), np.mean(iou_scores), np.mean(pixel_acc_scores)
 
 # Training loop
-def train_model(model, trainloader, validloader, epochs, patience):
+def train_model(model, trainloader, validloader, epochs, patience, lambda_factor):
     optimizer = torch.optim.Adam(model.parameters(), lr=LR)
     best_valid_loss = float('inf')
     patience_counter = 0
-
     for epoch in range(epochs):
-        train_loss = train_fn(trainloader, model, optimizer)
+        train_loss = train_fn(trainloader, model, optimizer, lambda_factor)
         valid_loss, valid_dice, valid_iou, valid_pixel_acc = eval_fn(validloader, model)
 
-        print(f"Epoch {epoch+1}/{epochs}")
+        print(f"Epoch {epoch + 1}/{epochs}")
         print(f"Valid Loss: {valid_loss:.4f}")
 
         if valid_loss < best_valid_loss:
@@ -337,15 +355,12 @@ def train_model(model, trainloader, validloader, epochs, patience):
             patience_counter += 1
 
         if patience_counter >= patience:
-            print(f"Early stopping after {epoch+1} epochs")
+            print(f"Early stopping after {epoch + 1} epochs")
             break
 
     print("Training completed.")
     return best_valid_loss
 
-# Initial training
-model = SegmentationModel().to(DEVICE)
-best_valid_loss = train_model(model, trainloader, validloader, EPOCHS, PATIENCE)
 
 # Function to generate pseudo-labels
 def generate_pseudo_labels(model, data_loader, threshold):
@@ -353,7 +368,7 @@ def generate_pseudo_labels(model, data_loader, threshold):
     pseudo_labels = []
     confidences = []
     with torch.no_grad():
-        for images, _ in tqdm(data_loader):
+        for images, _, _ in tqdm(data_loader):
             images = images.to(DEVICE)
             logits = model(images)
             probs = torch.sigmoid(logits).cpu().numpy()
@@ -361,26 +376,34 @@ def generate_pseudo_labels(model, data_loader, threshold):
             confidences.extend(np.max(probs, axis=(1, 2, 3)))
     return np.array(pseudo_labels), np.array(confidences)
 
+
 # Self-training loop
+model = SegmentationModel().to(DEVICE)
+best_valid_loss = train_model(model, trainloader, validloader, EPOCHS, PATIENCE, 0.0)  # Train initially without lambda
+
 for iteration in range(NUM_SELF_TRAINING_ITERATIONS):
     print(f"Self-training iteration {iteration + 1}/{NUM_SELF_TRAINING_ITERATIONS}")
 
     # Generate pseudo-labels
-    pseudo_labels, confidences = generate_pseudo_labels(model, unlabeledloader, INITIAL_UNCERTAINTY_THRESHOLD)
+    pseudo_labels, confidences = generate_pseudo_labels(model, unlabeledloader,
+                                                        INITIAL_UNCERTAINTY_THRESHOLD)
 
     # Dynamically adjust threshold and ratio
     current_threshold = INITIAL_UNCERTAINTY_THRESHOLD + (iteration * 0.02)  # Increase threshold slightly each iteration
     current_ratio = INITIAL_SELF_TRAIN_RATIO - (iteration * 0.1)  # Decrease ratio each iteration
     current_ratio = max(current_ratio, 0.1)  # Ensure ratio doesn't go below 0.1
+    current_lambda = min(INITIAL_LAMBDA + iteration * 0.1, 1.0) 
 
     # Select high-confidence pseudo-labels
     high_confidence_indices = np.where(confidences > current_threshold)[0]
     num_samples = int(current_ratio * len(unlabeled_df))
-    selected_indices = np.random.choice(high_confidence_indices, min(num_samples, len(high_confidence_indices)), replace=False)
+    selected_indices = np.random.choice(high_confidence_indices, min(num_samples, len(high_confidence_indices)),
+                                         replace=False)
 
     # Create pseudo-labeled dataset
     pseudo_labeled_df = unlabeled_df.iloc[selected_indices].copy()
     pseudo_labeled_df['masks'] = [None] * len(pseudo_labeled_df)
+    pseudo_labeled_df['is_pseudo'] = True  # Mark these as pseudo-labeled
 
     # Save pseudo-labels
     output_dir = os.path.join(mask_dir, f'TCN_SwinUNetR_output_iteration_{iteration + 1}')
@@ -397,11 +420,11 @@ for iteration in range(NUM_SELF_TRAINING_ITERATIONS):
 
     # Create new dataset and dataloader
     combined_trainset = SegmentationDataset(combined_df, get_train_augs())
-    combined_trainloader = DataLoader(combined_trainset, batch_size=BATCH_SIZE, shuffle=True)
+    combined_trainloader = DataLoader(combined_trainset, batch_size=BATCH_SIZE, shuffle=True, drop_last=True)
 
     # Retrain the model
     model = SegmentationModel().to(DEVICE)
-    new_valid_loss = train_model(model, combined_trainloader, validloader, EPOCHS, PATIENCE)
+    new_valid_loss = train_model(model, combined_trainloader, validloader, EPOCHS, PATIENCE, current_lambda)
 
     # If new model performs worse, revert to previous best model
     if new_valid_loss > best_valid_loss:
@@ -424,11 +447,11 @@ os.makedirs(test_output_dir, exist_ok=True)
 
 model.eval()
 with torch.no_grad():
-    for i, (images, _) in enumerate(testloader):
+    for i, (images, _, _) in enumerate(testloader):
         images = images.to(DEVICE)
         logits = model(images)
         preds = (torch.sigmoid(logits) > 0.5).cpu().numpy().astype(np.uint8)
-        
+
         for j, pred in enumerate(preds):
             image_name = os.path.basename(test_df.iloc[i * BATCH_SIZE + j].images)
             output_path = os.path.join(test_output_dir, f'pred_{image_name}')
