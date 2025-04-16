@@ -15,7 +15,7 @@ import shutil
 
 # Constants
 IMG_SIZE = 512
-BATCH_SIZE = 2
+BATCH_SIZE = 4
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 ENCODER = 'resnet152'
 WEIGHTS = None
