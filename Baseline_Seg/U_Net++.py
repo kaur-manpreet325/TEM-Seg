@@ -251,7 +251,7 @@ def train_model(model, trainloader, validloader, epochs, patience, lambda_factor
 
         if valid_loss < best_valid_loss:
             best_valid_loss = valid_loss
-            torch.save(model.state_dict(), 'best_model_DeepLabV3+.pt')
+            torch.save(model.state_dict(), 'best_model_UNet++.pt')
             print("Saved best model")
             patience_counter = 0
         else:
