@@ -28,7 +28,7 @@ cd TEM-Seg
 ```bash
 python -m venv venv
 source venv/bin/activate   # For Linux/macOS
-.env\Scriptsctivate    # For Windows
+.\venv\Scripts\activate   # For Windows
 ```
 
 3. Install required dependencies:
@@ -114,5 +114,17 @@ mask_dir = "/path/to/ground_masks"
 - Data augmentations are used during training to improve generalization.
 - Early stopping based on validation loss is implemented.
 - Pseudo-labels are saved at each self-training iteration.
+
+## Workflow Overview
+
+### 1. Model Architecture: TCN-SwinUNETR
+![Architecture](figures/SwinTCN-Seg.png)  
+*Figure: Detailed architecture of the TCN-SwinUNETR model. This model integrates hierarchical spatial features from Swin Transformer with temporal modeling using a Temporal Convolutional Network for robust HR-TEM segmentation.*
+
+### 2. End-to-End Pipeline
+![Workflow](figures/Semi-Supervised.png)  
+*Figure: Workflow of the semi-supervised segmentation pipeline. The top branch illustrates the pseudo-labeling and self-training loop, while the bottom shows supervised learning with labeled data.*
+
+
 
 
