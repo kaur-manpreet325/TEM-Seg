@@ -118,11 +118,11 @@ mask_dir = "/path/to/ground_masks"
 ## Workflow Overview
 
 ### 1. Model Architecture: TCN-SwinUNETR
-![Architecture](figures/SwinTCN-Seg.png)  
+![Architecture](Figures/SwinTCN-Seg.png)  
 *Figure: Detailed architecture of the TCN-SwinUNETR model. This model integrates hierarchical spatial features from Swin Transformer with temporal modeling using a Temporal Convolutional Network for robust HR-TEM segmentation.*
 
 ### 2. End-to-End Pipeline
-![Workflow](figures/Semi-Supervised.png)  
+![Workflow](Figures/Semi-Supervised.png)  
 *Figure: Workflow of the semi-supervised segmentation pipeline. The top branch illustrates the pseudo-labeling and self-training loop, while the bottom shows supervised learning with labeled data.*
 
 
