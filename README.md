@@ -1,4 +1,3 @@
-# TEM-Seg
 # Semi-Supervised and Temporally-Aware Segmentation of High-Resolution Transmission Electron Microscopy Image Sequences
 ## Overview
 High-Resolution Transmission Electron Microscopy (HR-TEM) is a crucial technique in materials science, enabling the visualization of atomic structures with sub-nanometer resolution. However, accurate segmentation and tracking of nanoparticles in HR-TEM images remain challenging due to factors such as noise, contrast variations, and dynamic morphological changes.
