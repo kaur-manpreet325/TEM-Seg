@@ -5,14 +5,14 @@ High-Resolution Transmission Electron Microscopy (HR-TEM) is a crucial technique
 
 This repository contains the codebase for the project **"Semi-Supervised and Temporally-Aware Segmentation of High-Resolution Transmission Electron Microscopy Image Sequences."**  
 We implement and evaluate several segmentation models for HR-TEM images, including:
+- **SwinTCN-Seg** (our proposed spatiotemporal model)
 - **U-Net**
 - **U-Net++**
 - **FPN**
 - **DeepLabV3+**
 - **SegFormer**
-- **SwinTCN-Seg** (our proposed spatiotemporal model)
 
-The framework employs **semi-supervised learning** using **pseudo-labeling** and **self-training** to leverage both labeled and unlabeled data. The final goal is to robustly segment dynamically evolving nanoparticle structures captured in HR-TEM videos.
+The framework employs **semi-supervised learning** using **pseudo-labeling** and **self-training** to leverage both labeled and unlabeled data. The final goal is to robustly segment dynamically evolving nanoparticle structures captured in HR-TEM sequences.
 
 ## Installation and Setup
 
