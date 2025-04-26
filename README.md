@@ -58,7 +58,8 @@ monai
 Organize your data:
 - Raw HR-TEM frames in a folder (e.g., `raw_frames/`)
 - Corresponding ground truth masks (e.g., `ground_masks/`)
-
+- Corresponding directory to save split data (e.g., `split_labeled_data/`)
+  
 Run:
 
 ```bash
