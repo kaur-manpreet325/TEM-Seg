@@ -118,7 +118,7 @@ mask_dir = "/path/to/ground_masks"
 
 ## Workflow Overview
 
-### 1. Model Architecture: TCN-SwinUNETR
+### 1. Model Architecture: SwinTCN-Seg
 ![Architecture](Figures/SwinTCN-Seg.png)  
 *Figure: Detailed architecture of the TCN-SwinUNETR model. This model integrates hierarchical spatial features from Swin Transformer with temporal modeling using a Temporal Convolutional Network for robust HR-TEM segmentation.*
 
