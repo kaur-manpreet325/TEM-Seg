@@ -123,8 +123,4 @@ mask_dir = "/path/to/ground_masks"
 
 ### 2. End-to-End Pipeline
 ![Workflow](Figures/Semi-Supervised.png)  
-*Figure: Workflow of the semi-supervised segmentation pipeline. The top branch illustrates the pseudo-labeling and self-training loop, while the bottom shows supervised learning with labeled data.*
-
-
-
-
+*Figure: Workflow of the semi-supervised segmentation pipeline. The top branch illustrates the supervised learning with labeled data, while the bottom shows pseudo-labeling and self-training loop.*
