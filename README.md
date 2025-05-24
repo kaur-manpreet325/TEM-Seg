@@ -67,14 +67,18 @@ python Data_Handling.py
 
 This will create the `train/`, `valid/`, `test/`, and `unlabeled/` folders.
 
-### 2. YOLO+SAM-based Semi-Automated Annotation
-To generate segmentation masks for HR-TEM frames using a semi-automated pipeline based on YOLOv8 and SAM:
+## 2. YOLO+SAM-based Semi-Automated Annotation
 
-Step 1: Clone the repository
-git clone https://github.com/ArdaGen/STEM-Automated-Nanoparticle-Analysis-YOLOv8-SAM.git
-cd STEM-Automated-Nanoparticle-Analysis-YOLOv8-SAM
+- To generate segmentation masks for HR-TEM frames using a semi-automated pipeline based on YOLOv8 and SAM:
 
-Step 2: Setup
+### Step 1: Clone the Repository
+
+- Run:
+  ```bash
+  git clone https://github.com/ArdaGen/STEM-Automated-Nanoparticle-Analysis-YOLOv8-SAM.git
+  cd STEM-Automated-Nanoparticle-Analysis-YOLOv8-SAM
+
+## Step 2: Setup
 Follow the instructions in the YOLOv8-SAM repository to:
 
 - Download pretrained weights (YOLOv8 and SAM)
@@ -83,10 +87,8 @@ Follow the instructions in the YOLOv8-SAM repository to:
 
 - Adjust input/output directory paths as needed in DATA/Raw/YOLO+SAM.py
 
-Step 3: Run Annotation Pipeline
-Use the provided script to perform object detection with YOLOv8 and mask generation with SAM. The pipeline automatically refines bounding boxes into segmentation masks.
-
-These generated masks can be saved in an output folder and used as an alternative to manual ground truths (5%) in the SwinTCN-Seg pipeline for self-training.
+## Step 3: Run Annotation Pipeline
+Use the provided script to perform object detection with YOLOv8 and mask generation with SAM. The pipeline automatically refines bounding boxes into segmentation masks. These generated masks can be saved in an output folder and used as an alternative to manual ground truths (5%) in the SwinTCN-Seg pipeline for self-training.
 
 ### 3. Training a Model
 
